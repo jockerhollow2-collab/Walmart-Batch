@@ -215,6 +215,7 @@ ventas_subcategoria_pd = ventas_subcategoria.toPandas()
 ventas_region_pd = ventas_region.toPandas()
 ventas_estado_pd = ventas_estado.toPandas()
 ventas_mes_pd = ventas_mes.toPandas()
+ventas_mes_pd["Year"] = ventas_mes_pd["Year"].astype(str)
 top_productos_pd = top_productos.limit(10).toPandas()
 top_clientes_pd = top_clientes.limit(10).toPandas()
 ventas_segmento_pd = ventas_segmento.toPandas()
@@ -253,15 +254,16 @@ fig_region = px.pie(
 )
 fig_region.update_layout(margin=dict(l=20, r=20, t=30, b=20))
 
-# Ventas Mensuales (Líneas Plotly)
 fig_mes = px.line(
     ventas_mes_pd,
     x="Month",
     y="Sales",
     color="Year",
-    markers=True
+    markers=True,
+    labels={"Month": "Mes del Año", "Sales": "Ventas (USD)", "Year": "Año"}
 )
 fig_mes.update_layout(margin=dict(l=20, r=20, t=30, b=20))
+fig_mes.update_xaxes(dtick=1)
 
 def fig_to_html(fig_obj):
     fig_obj.tight_layout(pad=2.0)
@@ -310,8 +312,8 @@ html_content += f"<div class='card full-width'><h2>1. Resumen Ejecutivo (KPIs)</
 plt.figure(figsize=(9, 6))
 sns.barplot(data=ventas_categoria_pd, x="Product Category", y="Total Sales", palette="viridis")
 plt.title("Ventas por Categoría")
-plt.ylabel("Ventas")
-plt.xlabel("")
+plt.ylabel("Ventas (USD)")
+plt.xlabel("Categoría de Producto")
 html_content += f"<div class='card'><h2>Ventas por Categoría</h2>{fig_to_html(plt.gcf())}</div>"
 
 # 2.2 Ventas por Región (Pie Plotly)
@@ -322,8 +324,8 @@ html_content += f"<div class='card'><h2>Distribución Regional de Ventas</h2><di
 plt.figure(figsize=(9, 6))
 sns.barplot(data=ventas_segmento_pd, x="Customer Segment", y="Sales", palette="Set2")
 plt.title("Ventas por Segmento de Clientes")
-plt.ylabel("Ventas")
-plt.xlabel("")
+plt.ylabel("Ventas (USD)")
+plt.xlabel("Segmento de Cliente")
 html_content += f"<div class='card'><h2>Ventas por Segmento</h2>{fig_to_html(plt.gcf())}</div>"
 
 # 2.4 Ventas por Subcategoría (Seaborn)
@@ -331,8 +333,8 @@ plt.figure(figsize=(10, 7))
 sns.barplot(data=ventas_subcategoria_pd, x="Product Sub-Category", y="Total Sales", color="#0071dc")
 plt.xticks(rotation=45, ha='right')
 plt.title("Ventas por Subcategoría de Producto")
-plt.ylabel("Ventas")
-plt.xlabel("")
+plt.ylabel("Ventas (USD)")
+plt.xlabel("Subcategoría de Producto")
 html_content += f"<div class='card'><h2>Ventas por Subcategoría</h2>{fig_to_html(plt.gcf())}</div>"
 
 # 2.5 Ventas por Estado (Seaborn)
@@ -340,31 +342,32 @@ plt.figure(figsize=(14, 7))
 sns.barplot(data=ventas_estado_pd.head(20), x="State", y="Sales", palette="Blues_r")
 plt.xticks(rotation=45, ha='right')
 plt.title("Top 20 Estados con Mayores Ventas")
-plt.ylabel("Ventas")
-plt.xlabel("")
+plt.ylabel("Ventas (USD)")
+plt.xlabel("Estado")
 html_content += f"<div class='card full-width'><h2>Ventas por Estado (Top 20)</h2>{fig_to_html(plt.gcf())}</div>"
 
 # 2.6 Top 10 Productos (Seaborn)
 plt.figure(figsize=(12, 8))
 sns.barplot(data=top_productos_pd, y="Product Name", x="Sales", palette="rocket")
 plt.title("Top 10 Productos más Vendidos")
-plt.xlabel("Ventas")
-plt.ylabel("")
+plt.xlabel("Ventas (USD)")
+plt.ylabel("Nombre del Producto")
 html_content += f"<div class='card'><h2>Top 10 Productos</h2>{fig_to_html(plt.gcf())}</div>"
 
 # 2.7 Top 10 Clientes (Seaborn)
 plt.figure(figsize=(10, 8))
 sns.barplot(data=top_clientes_pd, y="Customer Name", x="Sales", color="#4CAF50")
 plt.title("Top 10 Clientes por Ventas")
-plt.xlabel("Ventas")
-plt.ylabel("")
+plt.xlabel("Ventas (USD)")
+plt.ylabel("Nombre del Cliente")
 html_content += f"<div class='card'><h2>Top 10 Clientes</h2>{fig_to_html(plt.gcf())}</div>"
 
 # 2.8 Ventas por Año (Matplotlib)
 plt.figure(figsize=(9, 6))
 plt.plot(ventas_anio_pd["Year"].astype(str), ventas_anio_pd["Sales"], marker='s', color='#ffc220', linewidth=3, markersize=10)
 plt.title("Evolución Anual de Ventas")
-plt.ylabel("Ventas")
+plt.ylabel("Ventas (USD)")
+plt.xlabel("Año")
 plt.grid(True, alpha=0.3)
 html_content += f"<div class='card'><h2>Ventas por Año</h2>{fig_to_html(plt.gcf())}</div>"
 
@@ -377,8 +380,8 @@ plt.figure(figsize=(14, 7))
 sns.barplot(data=top_ciudades, x="City", y="Sales", palette="magma")
 plt.xticks(rotation=45, ha='right')
 plt.title("Top 20 Ciudades con Mayores Ventas")
-plt.ylabel("Ventas")
-plt.xlabel("")
+plt.ylabel("Ventas (USD)")
+plt.xlabel("Ciudad")
 html_content += f"<div class='card full-width'><h2>Ventas por Ciudad (Top 20)</h2>{fig_to_html(plt.gcf())}</div>"
 
 html_content += """
