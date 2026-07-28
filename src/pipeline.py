@@ -364,7 +364,7 @@ html_content = f"""
 <head>
     <title>Walmart Retail Analytics | Executive Dashboard</title>
     <meta charset='utf-8'>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
     <style>
         :root {{
             --walmart-blue: #0071dc;
@@ -433,60 +433,60 @@ html_content = f"""
         <!-- KPIs -->
         <div class='card'>
             <div class='card-header'>Indicadores Clave de Desempeño (KPIs)</div>
-            {pio.to_html(fig_kpi, full_html=False, include_plotlyjs=False)}
+            {pio.to_html(fig_kpi, full_html=False, include_plotlyjs=False, engine='json')}
         </div>
 
         <!-- Tendencias Temporales -->
         <div class='card'>
             <div class='card-header'>Tendencia de Ventas Anual</div>
-            {pio.to_html(fig_anio, full_html=False, include_plotlyjs=False)}
+            {pio.to_html(fig_anio, full_html=False, include_plotlyjs=False, engine='json')}
         </div>
 
         <div class='card'>
             <div class='card-header'>Ventas Mensuales (Comparativa)</div>
-            {pio.to_html(fig_mes, full_html=False, include_plotlyjs=False)}
+            {pio.to_html(fig_mes, full_html=False, include_plotlyjs=False, engine='json')}
         </div>
 
         <!-- Desglose por Producto -->
         <div class='card'>
             <div class='card-header'>Distribución por Categoría</div>
-            {pio.to_html(fig_cat, full_html=False, include_plotlyjs=False)}
+            {pio.to_html(fig_cat, full_html=False, include_plotlyjs=False, engine='json')}
         </div>
 
         <div class='card'>
             <div class='card-header'>Ventas por Subcategoría</div>
-            {pio.to_html(fig_sub, full_html=False, include_plotlyjs=False)}
+            {pio.to_html(fig_sub, full_html=False, include_plotlyjs=False, engine='json')}
         </div>
 
         <!-- Geografía -->
         <div class='card'>
             <div class='card-header'>Rendimiento por Estado</div>
-            {pio.to_html(fig_est, full_html=False, include_plotlyjs=False)}
+            {pio.to_html(fig_est, full_html=False, include_plotlyjs=False, engine='json')}
         </div>
 
         <div class='card'>
             <div class='card-header'>Top 20 Ciudades</div>
-            {pio.to_html(fig_ciu, full_html=False, include_plotlyjs=False)}
+            {pio.to_html(fig_ciu, full_html=False, include_plotlyjs=False, engine='json')}
         </div>
 
         <div class='card'>
             <div class='card-header'>Participación por Región</div>
-            {pio.to_html(fig_region, full_html=False, include_plotlyjs=False)}
+            {pio.to_html(fig_region, full_html=False, include_plotlyjs=False, engine='json')}
         </div>
 
         <!-- Clientes y Rankings -->
         <div class='card'>
             <div class='card-header'>Ventas por Segmento de Cliente</div>
-            {pio.to_html(fig_seg, full_html=False, include_plotlyjs=False)}
+            {pio.to_html(fig_seg, full_html=False, include_plotlyjs=False, engine='json')}
         </div>
 
         <div class='card'>
             <div class='card-header'>Top 5 Productos Mensuales - Histórico</div>
             <div style='display: flex; flex-direction: column; gap: 40px;'>
-                <div><h3>2022</h3>{pio.to_html(fig_2022, full_html=False, include_plotlyjs=False)}</div>
-                <div><h3>2023</h3>{pio.to_html(fig_2023, full_html=False, include_plotlyjs=False)}</div>
-                <div><h3>2024</h3>{pio.to_html(fig_2024, full_html=False, include_plotlyjs=False)}</div>
-                <div><h3>2025</h3>{pio.to_html(fig_2025, full_html=False, include_plotlyjs=False)}</div>
+                <div><h3>2022</h3>{pio.to_html(fig_2022, full_html=False, include_plotlyjs=False, engine='json')}</div>
+                <div><h3>2023</h3>{pio.to_html(fig_2023, full_html=False, include_plotlyjs=False, engine='json')}</div>
+                <div><h3>2024</h3>{pio.to_html(fig_2024, full_html=False, include_plotlyjs=False, engine='json')}</div>
+                <div><h3>2025</h3>{pio.to_html(fig_2025, full_html=False, include_plotlyjs=False, engine='json')}</div>
             </div>
         </div>
     </div>
