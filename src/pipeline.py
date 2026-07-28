@@ -266,7 +266,8 @@ def fig_to_html(fig_obj):
     fig_obj.tight_layout(pad=2.0)
     buf = io.BytesIO()
     fig_obj.savefig(buf, format='png', bbox_inches='tight', dpi=90)
-    data = base64.b64encode(buf.getbuffer()).decode("ascii")
+    import base64 as py_base64
+    data = py_base64.b64encode(buf.getbuffer()).decode("ascii")
     plt.close(fig_obj)
     return f'<img src="data:image/png;base64,{data}" style="width:100%; max-width:100%; height:auto; border-radius:4px; display: block;"/>'
 
