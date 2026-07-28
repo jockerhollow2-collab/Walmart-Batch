@@ -1,19 +1,11 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
-import io
-import base64
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
 from plotly.subplots import make_subplots
-
-# Configuración de Matplotlib/Seaborn
-sns.set_style("whitegrid")
-plt.rcParams["figure.figsize"] = (10, 6)
 
 # Configuración de rutas relativas
 BASE_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -41,6 +33,7 @@ if not os.path.exists(DATASET):
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
+from pyspark.sql.window import Window
 
 print("Iniciando sesión de Spark...")
 spark = SparkSession.builder \
@@ -150,20 +143,24 @@ ventas_region = silver.groupBy("Region").agg(
 ).orderBy(desc("Sales"))
 ventas_region.write.mode("overwrite").parquet(os.path.join(GOLD_PATH, "ventas_region.parquet"))
 
-# Top 10 productos
+# Top 5 Productos Mensuales
+ventana_gold = Window.partitionBy("Year", "Month").orderBy(col("Cantidad Vendida").desc())
+top_5_mensual_gold = (silver
+    .groupBy("Year", "Month", "Product Name")
+    .agg(sum("Order Quantity").alias("Cantidad Vendida"))
+    .withColumn("Ranking", row_number().over(ventana_gold))
+    .filter(col("Ranking") <= 5)
+    .orderBy("Year", "Month", "Ranking")
+)
+top_5_mensual_gold.write.mode("overwrite").parquet(os.path.join(GOLD_PATH, "top_5_productos_mensuales.parquet"))
+
+# Top 10 Productos General (necesario para el dashboard)
 top_productos = silver.groupBy("Product Name").agg(
     round(sum("Sales"), 2).alias("Sales"),
     sum("Order Quantity").alias("Quantity"),
     round(sum("Profit"), 2).alias("Profit")
 ).orderBy(desc("Sales"))
 top_productos.write.mode("overwrite").parquet(os.path.join(GOLD_PATH, "top_productos.parquet"))
-
-# Top 10 clientes
-top_clientes = silver.groupBy("Customer Name").agg(
-    round(sum("Sales"), 2).alias("Sales"),
-    round(sum("Profit"), 2).alias("Profit")
-).orderBy(desc("Sales"))
-top_clientes.write.mode("overwrite").parquet(os.path.join(GOLD_PATH, "top_clientes.parquet"))
 
 # Ventas por segmento
 ventas_segmento = silver.groupBy("Customer Segment").agg(
@@ -211,19 +208,17 @@ print("Generando Dashboard HTML...")
 
 # Carga de datos para visualizaciones en Pandas
 ventas_categoria_pd = ventas_categoria.toPandas()
-ventas_subcategoria_pd = ventas_subcategoria.toPandas()
 ventas_region_pd = ventas_region.toPandas()
 ventas_estado_pd = ventas_estado.toPandas()
 ventas_mes_pd = ventas_mes.toPandas()
-ventas_mes_pd["Year"] = ventas_mes_pd["Year"].astype(str)
+ventas_mes_pd["Year"] = ventas_mes_pd["Year"].astype(str) # Casteo clave para evitar problemas en Plotly
 top_productos_pd = top_productos.limit(10).toPandas()
-top_clientes_pd = top_clientes.limit(10).toPandas()
 ventas_segmento_pd = ventas_segmento.toPandas()
-ventas_anio_pd = ventas_anio.toPandas()
 resumen_pd = resumen.toPandas()
-ticket_promedio_pd = ticket_promedio.toPandas()
-top_ciudades = ventas_ciudad.toPandas().head(20)
+top_5_mensual_pd = top_5_mensual_gold.toPandas()
 
+# Cargar ticket promedio
+ticket_promedio_pd = ticket_promedio.toPandas()
 total_sales = resumen_pd["Total Sales"][0]
 total_profit = resumen_pd["Total Profit"][0]
 units_sold = resumen_pd["Units Sold"][0]
@@ -245,154 +240,265 @@ fig_kpi.add_trace(go.Indicator(mode="number", value=orders, number={"valueformat
 fig_kpi.add_trace(go.Indicator(mode="number", value=avg_ticket, number={"valueformat": "$,.2f"}, title={"text": "Ticket Promedio"}), row=2, col=3)
 fig_kpi.update_layout(height=450, margin=dict(l=20, r=20, t=30, b=20))
 
-# Ventas por Región (Pie Plotly)
+# 2.1 Ventas por Categoría (Plotly)
+fig_cat = px.bar(
+    ventas_categoria_pd,
+    x="Product Category",
+    y="Total Sales",
+    color="Product Category",
+    title="Ventas por Categoría",
+    labels={"Total Sales": "Ventas (USD)", "Product Category": "Categoría"},
+    template="plotly_white"
+)
+
+# 2.2 Ventas por Subcategoría (Plotly)
+fig_sub = px.bar(
+    ventas_subcategoria.toPandas(),
+    x="Product Sub-Category",
+    y="Total Sales",
+    title="Ventas por Subcategoría",
+    labels={"Total Sales": "Ventas Totales (USD)", "Product Sub-Category": "Subcategoría"},
+    template="plotly_white"
+)
+fig_sub.update_layout(xaxis_tickangle=-45)
+
+# 2.3 Ventas por Estado (Plotly)
+fig_est = px.bar(
+    ventas_estado_pd,
+    x="State",
+    y="Sales",
+    title="Ventas por Estado",
+    labels={"Sales": "Ventas Totales (USD)", "State": "Estado"},
+    template="plotly_white"
+)
+fig_est.update_layout(xaxis_tickangle=-90)
+
+# 2.4 Ventas por Ciudad (Plotly)
+top_ciudades = ventas_ciudad.toPandas().head(20)
+fig_ciu = px.bar(
+    top_ciudades,
+    x="City",
+    y="Sales",
+    color="Sales",
+    title="Top 20 Ciudades por Ventas",
+    labels={"Sales": "Ventas (USD)", "City": "Ciudad"},
+    color_continuous_scale="magma",
+    template="plotly_white"
+)
+fig_ciu.update_layout(xaxis_tickangle=-45)
+
+# 2.5 Ventas por Región (Pie Plotly)
 fig_region = px.pie(
     ventas_region_pd,
     values="Sales",
     names="Region",
-    color_discrete_sequence=px.colors.qualitative.Pastel
+    title="Ventas por Región"
 )
-fig_region.update_layout(margin=dict(l=20, r=20, t=30, b=20))
 
+# 2.6 Ventas por Segmento (Plotly)
+fig_seg = px.bar(
+    ventas_segmento_pd,
+    x="Customer Segment",
+    y="Sales",
+    color="Customer Segment",
+    title="Ventas por Segmento",
+    labels={"Sales": "Ventas (USD)", "Customer Segment": "Segmento"},
+    template="plotly_white",
+    color_discrete_sequence=px.colors.qualitative.Set2
+)
+
+# 2.7 Top 5 Productos Mensuales por Año
+def plot_top5_monthly_products(df_pandas, year_val):
+    df_filtered = df_pandas[df_pandas['Year'] == year_val].copy()
+    meses = {1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
+             7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"}
+    df_filtered["Mes"] = df_filtered["Month"].map(meses)
+    df_filtered["Top"] = df_filtered["Ranking"].apply(lambda x: f"Top {x}")
+    fig = px.bar(
+        df_filtered, x="Mes", y="Cantidad Vendida", color="Top", barmode="group",
+        category_orders={"Mes": list(meses.values()), "Top": [f"Top {i}" for i in range(1, 6)]},
+        title=f"Top 5 Productos por Mes ({year_val})",
+        labels={"Cantidad Vendida": "Cantidad Vendida (Unidades)", "Mes": "Mes"},
+        template="plotly_white", height=500
+    )
+    return fig
+
+fig_2022 = plot_top5_monthly_products(top_5_mensual_pd, 2022)
+fig_2023 = plot_top5_monthly_products(top_5_mensual_pd, 2023)
+fig_2024 = plot_top5_monthly_products(top_5_mensual_pd, 2024)
+fig_2025 = plot_top5_monthly_products(top_5_mensual_pd, 2025)
+
+# 2.8 Ventas por Año (Línea Plotly)
+ventas_anio_pd = ventas_anio.toPandas()
+ventas_anio_pd["Year"] = ventas_anio_pd["Year"].astype(str)
+fig_anio = px.line(
+    ventas_anio_pd,
+    x="Year",
+    y="Sales",
+    markers=True,
+    title="Tendencia de Ventas por Año",
+    labels={"Sales": "Ventas (USD)", "Year": "Año"},
+    template="plotly_white"
+)
+fig_anio.update_traces(
+    line_color="#0071dc",
+    marker=dict(size=10),
+    hovertemplate="<b>Año: %{x}</b><br>Ventas: $%{y:,.2f}<extra></extra>"
+)
+
+# 2.9 Ventas Mensuales (Línea Plotly)
 fig_mes = px.line(
     ventas_mes_pd,
     x="Month",
     y="Sales",
     color="Year",
     markers=True,
-    labels={"Month": "Mes del Año", "Sales": "Ventas (USD)", "Year": "Año"}
+    title="Ventas Mensuales",
+    labels={"Sales": "Ventas (USD)", "Month": "Mes del Año", "Year": "Año"}
 )
-fig_mes.update_layout(margin=dict(l=20, r=20, t=30, b=20))
 fig_mes.update_xaxes(dtick=1)
 
-def fig_to_html(fig_obj):
-    fig_obj.tight_layout(pad=2.0)
-    buf = io.BytesIO()
-    fig_obj.savefig(buf, format='png', bbox_inches='tight', dpi=90)
-    import base64 as py_base64
-    data = py_base64.b64encode(buf.getbuffer()).decode("ascii")
-    plt.close(fig_obj)
-    return f'<img src="data:image/png;base64,{data}" style="width:100%; max-width:100%; height:auto; border-radius:4px; display: block;"/>'
-
-# Plantilla HTML
-html_content = """
+# Plantilla HTML con diseño corporativo
+html_content = f"""
 <html>
 <head>
-    <title>Walmart Enterprise Analytics Dashboard</title>
+    <title>Walmart Retail Analytics | Executive Dashboard</title>
+    <meta charset='utf-8'>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
-        * { box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: #f0f2f5; color: #1c1e21; }
-        .header { background: #0071dc; color: white; padding: 25px; text-align: center; border-bottom: 5px solid #ffc220; }
-        .container { max-width: 1400px; margin: 20px auto; padding: 0 20px; }
-        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(600px, 1fr)); gap: 30px; margin-top: 20px; }
-        .full-width { grid-column: 1 / -1; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow: hidden; display: flex; flex-direction: column; }
-        h2 { color: #0071dc; border-left: 5px solid #ffc220; padding-left: 15px; margin-top: 0; font-size: 1.4em; margin-bottom: 20px; }
-        .plotly-wrapper { width: 100%; height: 400px; overflow: hidden; }
-        .footer { text-align: center; padding: 40px; color: #65676b; font-size: 0.9em; }
-        @media (max-width: 768px) {
-            .dashboard-grid { grid-template-columns: 1fr; }
-        }
+        :root {{
+            --walmart-blue: #0071dc;
+            --walmart-yellow: #ffc220;
+            --bg-gray: #f0f2f5;
+            --text-dark: #202124;
+            --card-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }}
+        body {{
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-gray);
+            color: var(--text-dark);
+            margin: 0;
+            padding: 0;
+        }}
+        .navbar {{
+            background-color: var(--walmart-blue);
+            color: white;
+            padding: 20px 40px;
+            text-align: left;
+            border-bottom: 5px solid var(--walmart-yellow);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+        .container {{
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            max-width: 1400px;
+            margin: auto;
+        }}
+        .card {{
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: var(--card-shadow);
+            margin-bottom: 10px;
+        }}
+        .card-header {{
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--walmart-blue);
+            margin-bottom: 20px;
+            border-left: 6px solid var(--walmart-yellow);
+            padding-left: 15px;
+        }}
+        .footer {{
+            text-align: center;
+            padding: 40px;
+            color: #777;
+            font-size: 0.9rem;
+        }}
     </style>
 </head>
 <body>
-    <div class='header'>
-        <h1>Walmart Retail - Dashboard Analítico</h1>
-        <p>Pipeline de datos automatizado</p>
+    <div class='navbar'>
+        <div>
+            <h1 style='margin:0;'>Walmart Data Lake Analytics</h1>
+            <span style='opacity: 0.9;'>Retail Executive Insights Portal</span>
+        </div>
     </div>
+
     <div class='container'>
-"""
+        <!-- KPIs -->
+        <div class='card'>
+            <div class='card-header'>Indicadores Clave de Desempeño (KPIs)</div>
+            {pio.to_html(fig_kpi, full_html=False, include_plotlyjs=False)}
+        </div>
 
-# Agregar KPIs
-kpi_html = pio.to_html(fig_kpi, full_html=False, include_plotlyjs=False, config={'responsive': True})
-html_content += f"<div class='card full-width'><h2>1. Resumen Ejecutivo (KPIs)</h2><div class='plotly-wrapper' style='height:450px;'>{kpi_html}</div></div><div class='dashboard-grid'>"
+        <!-- Tendencias Temporales -->
+        <div class='card'>
+            <div class='card-header'>Tendencia de Ventas Anual</div>
+            {pio.to_html(fig_anio, full_html=False, include_plotlyjs=False)}
+        </div>
 
-# 2.1 Ventas por Categoría (Seaborn)
-plt.figure(figsize=(9, 6))
-sns.barplot(data=ventas_categoria_pd, x="Product Category", y="Total Sales", palette="viridis")
-plt.title("Ventas por Categoría")
-plt.ylabel("Ventas (USD)")
-plt.xlabel("Categoría de Producto")
-html_content += f"<div class='card'><h2>Ventas por Categoría</h2>{fig_to_html(plt.gcf())}</div>"
+        <div class='card'>
+            <div class='card-header'>Ventas Mensuales (Comparativa)</div>
+            {pio.to_html(fig_mes, full_html=False, include_plotlyjs=False)}
+        </div>
 
-# 2.2 Ventas por Región (Pie Plotly)
-region_html = pio.to_html(fig_region, full_html=False, include_plotlyjs=False, config={'responsive': True})
-html_content += f"<div class='card'><h2>Distribución Regional de Ventas</h2><div class='plotly-wrapper'>{region_html}</div></div>"
+        <!-- Desglose por Producto -->
+        <div class='card'>
+            <div class='card-header'>Distribución por Categoría</div>
+            {pio.to_html(fig_cat, full_html=False, include_plotlyjs=False)}
+        </div>
 
-# 2.3 Ventas por Segmento (Seaborn)
-plt.figure(figsize=(9, 6))
-sns.barplot(data=ventas_segmento_pd, x="Customer Segment", y="Sales", palette="Set2")
-plt.title("Ventas por Segmento de Clientes")
-plt.ylabel("Ventas (USD)")
-plt.xlabel("Segmento de Cliente")
-html_content += f"<div class='card'><h2>Ventas por Segmento</h2>{fig_to_html(plt.gcf())}</div>"
+        <div class='card'>
+            <div class='card-header'>Ventas por Subcategoría</div>
+            {pio.to_html(fig_sub, full_html=False, include_plotlyjs=False)}
+        </div>
 
-# 2.4 Ventas por Subcategoría (Seaborn)
-plt.figure(figsize=(10, 7))
-sns.barplot(data=ventas_subcategoria_pd, x="Product Sub-Category", y="Total Sales", color="#0071dc")
-plt.xticks(rotation=45, ha='right')
-plt.title("Ventas por Subcategoría de Producto")
-plt.ylabel("Ventas (USD)")
-plt.xlabel("Subcategoría de Producto")
-html_content += f"<div class='card'><h2>Ventas por Subcategoría</h2>{fig_to_html(plt.gcf())}</div>"
+        <!-- Geografía -->
+        <div class='card'>
+            <div class='card-header'>Rendimiento por Estado</div>
+            {pio.to_html(fig_est, full_html=False, include_plotlyjs=False)}
+        </div>
 
-# 2.5 Ventas por Estado (Seaborn)
-plt.figure(figsize=(14, 7))
-sns.barplot(data=ventas_estado_pd.head(20), x="State", y="Sales", palette="Blues_r")
-plt.xticks(rotation=45, ha='right')
-plt.title("Top 20 Estados con Mayores Ventas")
-plt.ylabel("Ventas (USD)")
-plt.xlabel("Estado")
-html_content += f"<div class='card full-width'><h2>Ventas por Estado (Top 20)</h2>{fig_to_html(plt.gcf())}</div>"
+        <div class='card'>
+            <div class='card-header'>Top 20 Ciudades</div>
+            {pio.to_html(fig_ciu, full_html=False, include_plotlyjs=False)}
+        </div>
 
-# 2.6 Top 10 Productos (Seaborn)
-plt.figure(figsize=(12, 8))
-sns.barplot(data=top_productos_pd, y="Product Name", x="Sales", palette="rocket")
-plt.title("Top 10 Productos más Vendidos")
-plt.xlabel("Ventas (USD)")
-plt.ylabel("Nombre del Producto")
-html_content += f"<div class='card'><h2>Top 10 Productos</h2>{fig_to_html(plt.gcf())}</div>"
+        <div class='card'>
+            <div class='card-header'>Participación por Región</div>
+            {pio.to_html(fig_region, full_html=False, include_plotlyjs=False)}
+        </div>
 
-# 2.7 Top 10 Clientes (Seaborn)
-plt.figure(figsize=(10, 8))
-sns.barplot(data=top_clientes_pd, y="Customer Name", x="Sales", color="#4CAF50")
-plt.title("Top 10 Clientes por Ventas")
-plt.xlabel("Ventas (USD)")
-plt.ylabel("Nombre del Cliente")
-html_content += f"<div class='card'><h2>Top 10 Clientes</h2>{fig_to_html(plt.gcf())}</div>"
+        <!-- Clientes y Rankings -->
+        <div class='card'>
+            <div class='card-header'>Ventas por Segmento de Cliente</div>
+            {pio.to_html(fig_seg, full_html=False, include_plotlyjs=False)}
+        </div>
 
-# 2.8 Ventas por Año (Matplotlib)
-plt.figure(figsize=(9, 6))
-plt.plot(ventas_anio_pd["Year"].astype(str), ventas_anio_pd["Sales"], marker='s', color='#ffc220', linewidth=3, markersize=10)
-plt.title("Evolución Anual de Ventas")
-plt.ylabel("Ventas (USD)")
-plt.xlabel("Año")
-plt.grid(True, alpha=0.3)
-html_content += f"<div class='card'><h2>Ventas por Año</h2>{fig_to_html(plt.gcf())}</div>"
-
-# 2.9 Ventas por Mes (Plotly)
-mes_html = pio.to_html(fig_mes, full_html=False, include_plotlyjs=False, config={'responsive': True})
-html_content += f"<div class='card full-width'><h2>Estacionalidad Mensual de Ventas</h2><div class='plotly-wrapper' style='height:450px;'>{mes_html}</div></div>"
-
-# 2.10 Ventas por Ciudad (Seaborn)
-plt.figure(figsize=(14, 7))
-sns.barplot(data=top_ciudades, x="City", y="Sales", palette="magma")
-plt.xticks(rotation=45, ha='right')
-plt.title("Top 20 Ciudades con Mayores Ventas")
-plt.ylabel("Ventas (USD)")
-plt.xlabel("Ciudad")
-html_content += f"<div class='card full-width'><h2>Ventas por Ciudad (Top 20)</h2>{fig_to_html(plt.gcf())}</div>"
-
-html_content += """
+        <div class='card'>
+            <div class='card-header'>Top 5 Productos Mensuales - Histórico</div>
+            <div style='display: flex; flex-direction: column; gap: 40px;'>
+                <div><h3>2022</h3>{pio.to_html(fig_2022, full_html=False, include_plotlyjs=False)}</div>
+                <div><h3>2023</h3>{pio.to_html(fig_2023, full_html=False, include_plotlyjs=False)}</div>
+                <div><h3>2024</h3>{pio.to_html(fig_2024, full_html=False, include_plotlyjs=False)}</div>
+                <div><h3>2025</h3>{pio.to_html(fig_2025, full_html=False, include_plotlyjs=False)}</div>
+            </div>
+        </div>
     </div>
+
     <div class='footer'>
-        <p>Walmart Retail | Dashboard Corporativo | Generado Automáticamente por el Pipeline Batch</p>
+        &copy; 2026 Walmart Retail Analytics Data Lake - Reporte Automatizado
     </div>
 </body>
 </html>
 """
 
+# Guardar los reportes en localizaciones correspondientes
 OUTPUT_HTML = os.path.join(REPORTS_PATH, "dashboard_report.html")
 OUTPUT_DOCS = os.path.join(DOCS_PATH, "index.html")
 
