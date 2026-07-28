@@ -198,8 +198,8 @@ resumen = silver.agg(
     round(sum("Sales"), 2).alias("Total Sales"),
     round(sum("Profit"), 2).alias("Total Profit"),
     sum("Order Quantity").alias("Units Sold"),
-    countDistinct("Customer Name").alias("Customers"),
-    countDistinct("Order ID").alias("Orders")
+    count_distinct("Customer Name").alias("Customers"),
+    count_distinct("Order ID").alias("Orders")
 )
 resumen.write.mode("overwrite").parquet(os.path.join(GOLD_PATH, "resumen.parquet"))
 print("Capa Gold guardada exitosamente.")
